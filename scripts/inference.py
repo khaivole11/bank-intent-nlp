@@ -1,4 +1,5 @@
 import argparse
+import difflib
 import json
 from pathlib import Path
 import re
@@ -12,7 +13,8 @@ PROMPT_TEMPLATE = (
     "Below is an instruction that describes a task, paired with an input that provides further context. "
     "Write a response that appropriately completes the request.\n\n"
     "### Instruction:\n"
-    "Categorize the following banking query into its corresponding intent.\n\n"
+    "Categorize the following banking query into its corresponding intent. "
+    "Respond with exactly one intent label in snake_case only.\n\n"
     "### Input:\n"
     "{text}\n\n"
     "### Response:\n"
@@ -23,6 +25,26 @@ def normalize_prediction(raw: str):
     text = raw.strip().splitlines()[0].strip().lower().replace(" ", "_")
     text = re.sub(r"[^a-z0-9_?]", "", text)
     return text
+
+
+def map_prediction_to_label(raw: str, labels):
+    labels_set = set(labels)
+    raw_norm = raw.strip().lower()
+    candidate = normalize_prediction(raw_norm)
+
+    if candidate in labels_set:
+        return candidate
+
+    search_space = re.sub(r"[^a-z0-9_ ]", " ", raw_norm).replace(" ", "_")
+    for label in sorted(labels, key=len, reverse=True):
+        if label in search_space:
+            return label
+
+    close = difflib.get_close_matches(candidate, labels, n=1, cutoff=0.75)
+    if close:
+        return close[0]
+
+    return "unknown_intent"
 
 
 class IntentClassification:
@@ -75,17 +97,17 @@ class IntentClassification:
         with torch.no_grad():
             outputs = self.model.generate(
                 **encoded,
-                max_new_tokens=8,
+                max_new_tokens=24,
                 do_sample=False,
                 eos_token_id=self.tokenizer.eos_token_id,
                 pad_token_id=self.tokenizer.eos_token_id,
             )
 
         generated = self.tokenizer.decode(outputs[0][encoded["input_ids"].shape[1] :], skip_special_tokens=True)
-        pred = normalize_prediction(generated)
+        if self.labels:
+            return map_prediction_to_label(generated, self.labels)
 
-        if self.labels and pred in set(self.labels):
-            return pred
+        pred = normalize_prediction(generated)
         return pred if pred else "unknown_intent"
 
 

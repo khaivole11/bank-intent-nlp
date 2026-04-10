@@ -1,6 +1,7 @@
 from unsloth import FastLanguageModel
 
 import argparse
+import difflib
 import json
 import re
 from pathlib import Path
@@ -18,7 +19,8 @@ PROMPT_TEMPLATE = (
 	"Below is an instruction that describes a task, paired with an input that provides further context. "
 	"Write a response that appropriately completes the request.\n\n"
 	"### Instruction:\n"
-	"Categorize the following banking query into its corresponding intent.\n\n"
+	"Categorize the following banking query into its corresponding intent. "
+	"Respond with exactly one intent label in snake_case only.\n\n"
 	"### Input:\n"
 	"{text}\n\n"
 	"### Response:\n"
@@ -69,9 +71,29 @@ def normalize_prediction(raw: str):
 	return text
 
 
+def map_prediction_to_label(raw: str, labels):
+	labels_set = set(labels)
+	raw_norm = raw.strip().lower()
+	candidate = normalize_prediction(raw_norm)
+
+	if candidate in labels_set:
+		return candidate
+
+	# Handle outputs like "intent: cash_withdrawal" or sentences containing a label.
+	search_space = re.sub(r"[^a-z0-9_ ]", " ", raw_norm).replace(" ", "_")
+	for label in sorted(labels, key=len, reverse=True):
+		if label in search_space:
+			return label
+
+	close = difflib.get_close_matches(candidate, labels, n=1, cutoff=0.75)
+	if close:
+		return close[0]
+
+	return "__unknown__"
+
+
 def evaluate_generation(model, tokenizer, test_df, labels, text_col: str, target_col: str, max_length: int):
 	FastLanguageModel.for_inference(model)
-	labels_set = set(labels)
 
 	preds = []
 	gts = []
@@ -85,16 +107,14 @@ def evaluate_generation(model, tokenizer, test_df, labels, text_col: str, target
 		with torch.no_grad():
 			outputs = model.generate(
 				**encoded,
-				max_new_tokens=8,
+				max_new_tokens=24,
 				do_sample=False,
 				eos_token_id=tokenizer.eos_token_id,
 				pad_token_id=tokenizer.eos_token_id,
 			)
 
 		generated = tokenizer.decode(outputs[0][encoded["input_ids"].shape[1] :], skip_special_tokens=True)
-		pred = normalize_prediction(generated)
-		if pred not in labels_set:
-			pred = "__unknown__"
+		pred = map_prediction_to_label(generated, labels)
 
 		preds.append(pred)
 		gts.append(str(row[target_col]))
