@@ -1,3 +1,5 @@
+from unsloth import FastLanguageModel
+
 import argparse
 import json
 import re
@@ -11,7 +13,6 @@ from datasets import Dataset
 from sklearn.metrics import accuracy_score, f1_score
 from transformers import TrainingArguments
 from trl import SFTTrainer
-from unsloth import FastLanguageModel
 
 
 PROMPT_TEMPLATE = (
