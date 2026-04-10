@@ -1,0 +1,6 @@
+model:
+  checkpoint_path: outputs/checkpoints/final
+  label_map_path: sample_data/label_map.json
+  max_length: 256
+  load_in_4bit: true
+  device: auto
