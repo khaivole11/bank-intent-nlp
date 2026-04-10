@@ -28,13 +28,6 @@ else
 	exit 1
 fi
 
-GPU_AVAILABLE=$("$PYTHON_BIN" -c "import torch; print('1' if torch.cuda.is_available() else '0')" 2>/dev/null || echo "0")
-if [ "$GPU_AVAILABLE" != "1" ]; then
-	echo "Error: Unsloth requires a CUDA GPU, but no GPU was detected."
-	echo "Tip: run a quick local test first with: bash ./train_local.sh"
-	exit 1
-fi
-
 CMD=("$PYTHON_BIN" scripts/train.py --config "$CONFIG_PATH")
 
 if [ -n "$MODEL_NAME" ]; then

@@ -11,8 +11,7 @@ import torch
 import yaml
 from datasets import Dataset
 from sklearn.metrics import accuracy_score, f1_score
-from transformers import TrainingArguments
-from trl import SFTTrainer
+from trl import SFTConfig, SFTTrainer
 
 
 PROMPT_TEMPLATE = (
@@ -157,7 +156,7 @@ def main():
 	train_df["text"] = train_df.apply(lambda r: build_train_text(r, text_col, target_col), axis=1)
 	train_ds = Dataset.from_pandas(train_df[["text"]], preserve_index=False)
 
-	training_args = TrainingArguments(
+	training_args = SFTConfig(
 		output_dir=train_cfg["output_dir"],
 		per_device_train_batch_size=int(train_cfg["per_device_train_batch_size"]),
 		gradient_accumulation_steps=int(train_cfg["gradient_accumulation_steps"]),
@@ -168,6 +167,9 @@ def main():
 		logging_steps=int(train_cfg["logging_steps"]),
 		save_strategy=train_cfg["save_strategy"],
 		save_total_limit=int(train_cfg["save_total_limit"]),
+		max_length=max_length,
+		packing=True,
+		packing_strategy="bfd",
 		seed=int(train_cfg["seed"]),
 		fp16=not torch.cuda.is_bf16_supported(),
 		bf16=torch.cuda.is_bf16_supported(),
@@ -179,7 +181,6 @@ def main():
 		tokenizer=tokenizer,
 		train_dataset=train_ds,
 		dataset_text_field="text",
-		max_seq_length=max_length,
 		args=training_args,
 	)
 
