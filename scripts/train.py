@@ -12,6 +12,7 @@ import torch
 import yaml
 from datasets import Dataset
 from sklearn.metrics import accuracy_score, f1_score
+from sklearn.model_selection import train_test_split
 from trl import SFTConfig, SFTTrainer
 
 
@@ -61,6 +62,16 @@ def prepare_dataframe(df: pd.DataFrame, text_col: str, target_col: str, labels_s
 	return out
 
 
+def split_train_validation(df: pd.DataFrame, test_size=0.1, random_state=42, target_col=None):
+	train_df, valid_df = train_test_split(
+		df,
+		test_size=test_size,
+		random_state=random_state,
+		stratify=df[target_col] if target_col else None
+	)
+	return train_df, valid_df
+
+
 def build_train_text(row, text_col: str, target_col: str):
 	return PROMPT_TEMPLATE.format(text=row[text_col]) + row[target_col]
 
@@ -79,7 +90,6 @@ def map_prediction_to_label(raw: str, labels):
 	if candidate in labels_set:
 		return candidate
 
-	# Handle outputs like "intent: cash_withdrawal" or sentences containing a label.
 	search_space = re.sub(r"[^a-z0-9_ ]", " ", raw_norm).replace(" ", "_")
 	for label in sorted(labels, key=len, reverse=True):
 		if label in search_space:
@@ -153,6 +163,13 @@ def main():
 	train_df = prepare_dataframe(train_df, text_col, target_col, labels_set)
 	test_df = prepare_dataframe(test_df, text_col, target_col, labels_set)
 
+	train_df, valid_df = split_train_validation(
+		train_df,
+		test_size=0.1,
+		random_state=int(train_cfg.get("seed", 42)),
+		target_col=target_col
+	)
+
 	max_length = int(model_cfg.get("max_length", 256))
 	model, tokenizer = FastLanguageModel.from_pretrained(
 		model_name=model_cfg["model_name"],
@@ -206,9 +223,19 @@ def main():
 
 	trainer.train()
 
+	valid_accuracy, valid_f1_macro = evaluate_generation(
+		model=model,
+		tokenizer=tokenizer,
+		test_df=valid_df,
+		labels=labels,
+		text_col=text_col,
+		target_col=target_col,
+		max_length=max_length,
+	)
+
 	eval_max_samples = int(train_cfg.get("eval_max_samples", 0))
 	eval_df = test_df if eval_max_samples <= 0 else test_df.head(eval_max_samples)
-	eval_accuracy, eval_f1_macro = evaluate_generation(
+	final_accuracy, final_f1_macro = evaluate_generation(
 		model=model,
 		tokenizer=tokenizer,
 		test_df=eval_df,
@@ -225,9 +252,14 @@ def main():
 	tokenizer.save_pretrained(str(final_dir))
 
 	metrics = {
-		"eval_accuracy": float(eval_accuracy),
-		"eval_f1_macro": float(eval_f1_macro),
+		"valid_accuracy": float(valid_accuracy),
+		"valid_f1_macro": float(valid_f1_macro),
+		"valid_samples": int(len(valid_df)),
+		
+		"eval_accuracy": float(final_accuracy),
+		"eval_f1_macro": float(final_f1_macro),
 		"eval_samples": int(len(eval_df)),
+		
 		"train_samples": int(len(train_df)),
 		"model_name": model_cfg["model_name"],
 		"max_length": int(max_length),
