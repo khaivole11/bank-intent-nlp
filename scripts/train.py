@@ -111,7 +111,7 @@ def evaluate_generation(model, tokenizer, test_df, labels, text_col: str, target
 
 	for _, row in test_df.iterrows():
 		prompt = PROMPT_TEMPLATE.format(text=row[text_col])
-		encoded = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=max_length)
+		encoded = tokenizer(text=prompt, return_tensors="pt", truncation=True, max_length=max_length)
 		encoded = {k: v.to(device) for k, v in encoded.items()}
 
 		with torch.no_grad():
