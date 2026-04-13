@@ -87,7 +87,7 @@ class IntentClassification:
     def __call__(self, message):
         prompt = PROMPT_TEMPLATE.format(text=str(message))
         encoded = self.tokenizer(
-            prompt,
+            text=prompt,
             return_tensors="pt",
             truncation=True,
             max_length=self.max_length,
