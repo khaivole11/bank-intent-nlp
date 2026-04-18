@@ -123,7 +123,7 @@ If your Kaggle run produces `outputs/checkpoints/metrics.json`, you can also rep
 
 ## Video demo
 
-- Demo video: [YouTube](#) (Update later with actual link)
+- Demo video: [Google Drive](https://drive.google.com/file/d/1t69_XLluZltZ25P0VdkRJvtk_6T1bTza/view?usp=sharing)
 
 ## Notes
 
